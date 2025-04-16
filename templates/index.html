@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Enhancement Comparison</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    perspective: 1000px;
+    position: relative;
+    background: radial-gradient(circle at 50% 50%, #1a1a1d, #0c0c0d);
+}
+
+.starfield {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('https://www.transparenttextures.com/patterns/stardust.png');
+    background-size: cover;
+    animation: starfield 30s linear infinite;
+    opacity: 0.5;
+    z-index: -2;
+}
+
+@keyframes starfield {
+    0% { background-position: 0 0; }
+    100% { background-position: 10000px 10000px; }
+}
+
+.nebula {
+    position: absolute;
+    top: -100px;
+    left: -150px;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(100, 0, 255, 0.4), transparent);
+    opacity: 0.3;
+    z-index: -1;
+    transform: translate3d(0px, 0px, 0px);
+    animation: nebulaMove 20s ease-in-out infinite;
+}
+
+@keyframes nebulaMove {
+    0% { transform: translate3d(-20px, -20px, 0); }
+    50% { transform: translate3d(20px, 20px, 0); }
+    100% { transform: translate3d(-20px, -20px, 0); }
+}
+
+.container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 60px 70px;
+    border-radius: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    max-width: 1000px;
+    width: 100%;
+    text-align: center;
+    position: relative;
+    backdrop-filter: blur(15px);
+    animation: fadeIn 2s ease;
+    z-index: 1;
+}
+
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+h1 {
+    color: #ffffff;
+    font-size: 3rem;
+    margin-bottom: 40px;
+    font-weight: 700;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
+    animation: textPop 1.2s ease;
+}
+
+@keyframes textPop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 40px;
+}
+
+input[type="file"] {
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 30px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-size: 1.1rem;
+    transition: background-color 0.3s ease;
+}
+
+input[type="file"]::file-selector-button {
+    background-color: #00bfff;
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+input[type="file"]:hover::file-selector-button {
+    background-color: #007acc;
+}
+
+button {
+    background-color: #00bfff;
+    color: white;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+    animation: buttonPop 1.5s ease 0.3s backwards;
+}
+
+button:hover {
+    background-color: #007acc;
+    box-shadow: 0 7px 25px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes buttonPop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.images {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 30px;
+}
+
+.image-container {
+    flex: 1;
+    min-width: 280px;
+    max-width: 320px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.6));
+    animation: imageFadeIn 2s ease forwards;
+}
+
+.image-container:hover {
+    transform: scale(1.1) rotate(-2deg);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8);
+}
+
+.image-container img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-bottom: 4px solid #00bfff;
+}
+
+.caption {
+    padding: 20px;
+    background-color: #00bfff;
+    color: white;
+    text-align: center;
+    font-weight: 500;
+    letter-spacing: 1px;
+    font-size: 1.1rem;
+    border-top: 2px solid #007acc;
+}
+
+footer {
+    margin-top: 40px;
+    padding: 20px 0;
+    background-color: rgba(255, 255, 255, 0.1);
+    text-align: center;
+    color: #f0f0f0;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+footer p {
+    margin: 0;
+    color: #00bfff;
+    font-weight: 600;
+    text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
+}
+
+body::-webkit-scrollbar {
+    width: 12px;
+}
+
+body::-webkit-scrollbar-track {
+    background: #2c2c2c;
+}
+
+body::-webkit-scrollbar-thumb {
+    background-color: #5a5a5a;
+    border-radius: 10px;
+    border: 2px solid #2c2c2c;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+    background-color: #777777;
+}
+
+@media (max-width: 768px) {
+    .images {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    h1 {
+        font-size: 2.4rem;
+    }
+
+    button {
+        width: 100%;
+    }
+}
+
+    </style>
+</head>
+<body>
+    <div class="starfield"></div>
+    <div class="nebula"></div>
+    <div class="container">
+        <h1>Upload Lunar Image for Enhancements</h1>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept="image/*" required>
+            <button type="submit">Upload and Enhance</button>
+        </form>
+
+        {% if original_image and pipeline_image and unet_image and llflow_image and deep_upe_image and retinex_net_image %}
+        <div class="images">
+            <!-- Original Image -->
+            <div class="image-container">
+                <img src="{{ url_for('static', filename=original_image) }}" alt="Original Image">
+                <div class="caption">Original Image</div>
+            </div>
+
+            <!-- Pipeline Enhanced Image -->
+            <div class="image-container">
+                <img src="{{ url_for('static', filename=pipeline_image) }}" alt="Pipeline Enhanced Image">
+                <div class="caption">VIPER Enhanced Image</div>
+            </div>
+
+            <!-- U-Net Enhanced Image -->
+            <div class="image-container">
+                <img src="{{ url_for('static', filename=unet_image) }}" alt="U-Net Enhanced Image">
+                <div class="caption">U-Net Enhanced Image</div>
+            </div>
+
+            <!-- LLFlow Enhanced Image -->
+            <div class="image-container">
+                <img src="{{ url_for('static', filename=llflow_image) }}" alt="LLFlow Enhanced Image">
+                <div class="caption">LLFlow Enhanced Image</div>
+            </div>
+
+            <!-- Deep UPE Enhanced Image -->
+            <div class="image-container">
+                <img src="{{ url_for('static', filename=deep_upe_image) }}" alt="Deep UPE Enhanced Image">
+                <div class="caption">Deep UPE Enhanced Image</div>
+            </div>
+
+            <!-- Retinex-Net Enhanced Image -->
+            <div class="image-container">
+                <img src="{{ url_for('static', filename=retinex_net_image) }}" alt="Retinex-Net Enhanced Image">
+                <div class="caption">Retinex-Net Enhanced Image</div>
+            </div>
+        </div>
+<br>
+        <!-- Comparison Table -->
+        <h3>Image Processing Comparison</h3>
+        <table border="1" cellpadding="10" cellspacing="0" style="width: 100%; text-align: center;">
+            <!--<thead style="background-color: #f2f2f2;">-->
+                <tr>
+                    <th>Original Image</th>
+                    <th>Canny (Original)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row for images and edge counts -->
+                <tr>
+                    <!-- Original -->
+                
+                    <td><img src="{{ url_for('static', filename=original_image) }}" style="max-width: 100%; height: auto;"><br></td>
+                    <td><img src="{{ url_for('static', filename=original_canny) }}" style="max-width: 100%; height: auto;"><br>{{ original_edges }} pixels</td>
+                </tr>
+                <tr>
+                    <!-- Pipeline -->
+                    <td><img src="{{ url_for('static', filename=pipeline_image) }}" style="max-width: 100%; height: auto;"></td>
+                    <td><img src="{{ url_for('static', filename=pipeline_canny) }}" style="max-width: 100%; height: auto;"><br>{{ pipeline_edges }} pixels</td>
+                </tr>
+                <tr>
+                    <!-- U-Net -->
+                    <td><img src="{{ url_for('static', filename=deep_upe_image) }}" style="max-width: 100%; height: auto;"></td>
+                    <td><img src="{{ url_for('static', filename=deep_canny) }}" style="max-width: 100%; height: auto;"><br>{{ deep_edges }} pixels</td>
+                </tr>
+                <tr>
+                    <!-- U-Net -->
+                    <td><img src="{{ url_for('static', filename=retinex_net_image) }}" style="max-width: 100%; height: auto;"></td>
+                    <td><img src="{{ url_for('static', filename=retinex_canny) }}" style="max-width: 100%; height: auto;"><br>{{ retinex_edges }} pixels</td>
+                </tr>
+            </tbody>
+        </table>
+
+        {% endif %}
+    </div>
+
+    <!-- Interactive Background Script -->
+    <script>
+        document.body.onmousemove = function(e){
+          let x = e.clientX / window.innerWidth - 0.5;
+          let y = e.clientY / window.innerHeight - 0.5;
+
+          document.body.style.setProperty('--mouseX', x * 10 + 'px');
+          document.body.style.setProperty('--mouseY', y * 10 + 'px');
+      };
+    </script>
+
+</body>
+</html>
