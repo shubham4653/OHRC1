@@ -9,7 +9,9 @@ from torchvision import transforms
 import torch.nn as nn
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import img_to_array, load_img, array_to_img
+import os
 
+# Initialize Flask app
 app = Flask(__name__)
 
 # Paths for saving uploaded and processed images
@@ -263,7 +265,6 @@ def upload_image():
 
     return render_template("index.html")
 
-
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
