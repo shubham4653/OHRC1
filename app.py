@@ -1,63 +1,41 @@
-import os
+import io
+import base64
 import cv2
 import numpy as np
-from skimage.restoration import denoise_wavelet
 from PIL import Image
 from flask import Flask, request, render_template
+from skimage.restoration import denoise_wavelet
 import torch
 from torchvision import transforms
 import torch.nn as nn
 import tensorflow as tf
-from tensorflow.keras.preprocessing.image import img_to_array, load_img, array_to_img
-import os
+from tensorflow.keras.preprocessing.image import img_to_array
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Paths for saving uploaded and processed images
-UPLOAD_FOLDER = 'static/uploads/'
-PROCESSED_FOLDER = 'static/processed/'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
-
-# U-Net model definition
+# ----- U-Net Definition -----
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
         self.encoder1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.Conv2d(3, 64, 3, padding=1), nn.ReLU(), nn.Conv2d(64, 64, 3, padding=1), nn.ReLU()
         )
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool = nn.MaxPool2d(2, 2)
         self.encoder2 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.Conv2d(64, 128, 3, padding=1), nn.ReLU(), nn.Conv2d(128, 128, 3, padding=1), nn.ReLU()
         )
         self.middle = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.Conv2d(128, 256, 3, padding=1), nn.ReLU(), nn.Conv2d(256, 256, 3, padding=1), nn.ReLU()
         )
-        self.upconv1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.upconv1 = nn.ConvTranspose2d(256, 128, 2, stride=2)
         self.decoder1 = nn.Sequential(
-            nn.Conv2d(256, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.Conv2d(256, 128, 3, padding=1), nn.ReLU(), nn.Conv2d(128, 128, 3, padding=1), nn.ReLU()
         )
-        self.upconv2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.upconv2 = nn.ConvTranspose2d(128, 64, 2, stride=2)
         self.decoder2 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.Conv2d(128, 64, 3, padding=1), nn.ReLU(), nn.Conv2d(64, 64, 3, padding=1), nn.ReLU()
         )
-        self.output = nn.Conv2d(64, 3, kernel_size=1)
+        self.output = nn.Conv2d(64, 3, 1)
 
     def forward(self, x):
         x1 = self.encoder1(x)
@@ -71,200 +49,109 @@ class UNet(nn.Module):
         x5 = self.upconv2(x4)
         x5 = torch.cat([x5, x1], dim=1)
         x5 = self.decoder2(x5)
-        x_out = self.output(x5)
-        return x_out
+        return self.output(x5)
 
-# LLFlowNet model definition
+# ----- LLFlowNet Definition -----
 class LLFlowNet(nn.Module):
     def __init__(self):
         super(LLFlowNet, self).__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU()
+            nn.Conv2d(3, 64, 3, 1, 1), nn.ReLU(), nn.Conv2d(64, 128, 3, 1, 1), nn.ReLU()
         )
         self.decoder = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1),
-            nn.Sigmoid()
+            nn.Conv2d(128, 64, 3, 1, 1), nn.ReLU(), nn.Conv2d(64, 3, 3, 1, 1), nn.Sigmoid()
         )
 
     def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return decoded
+        return self.decoder(self.encoder(x))
 
-# Load U-Net model
+# ----- Load models -----
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 unet_model = UNet().to(device)
 unet_model.load_state_dict(torch.load('yolov5500.pth', map_location=device))
 unet_model.eval()
 
-# Load LLFlowNet model
 llflow_model = LLFlowNet().to(device)
 llflow_model.load_state_dict(torch.load('llflow_model.pth', map_location=device))
 llflow_model.eval()
 
-# Load DeepUPE model
-deep_upe_model = tf.keras.models.load_model('deep_upe_model500e1.h5')
+retinex_model = tf.keras.models.load_model('retinexnet_model.h5', custom_objects={'mse': tf.keras.losses.MeanSquaredError()})
 
-# Load Retinex-Net model
-retinex_net_model = tf.keras.models.load_model('retinexnet_model.h5', custom_objects={'mse': tf.keras.losses.MeanSquaredError()})
+transform = transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()])
 
-# Image transformations
-test_transform = transforms.Compose([
-    transforms.Resize((256, 256)),
-    transforms.ToTensor()
-])
+# ----- Helper: In-memory to base64 -----
+def img_to_base64(img_array):
+    _, buffer = cv2.imencode('.png', img_array)
+    return base64.b64encode(buffer).decode('utf-8')
 
-# Step 1: Preprocess image (Noise reduction and contrast enhancement)
-def preprocess_image(image_path):
-    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    denoised_image = denoise_wavelet(image, mode='soft', wavelet_levels=3, rescale_sigma=True)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced_image = clahe.apply((denoised_image * 255).astype('uint8'))
-    return enhanced_image
+# ----- Preprocessing -----
+def preprocess_image(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    denoised = denoise_wavelet(gray, mode='soft', wavelet_levels=3, rescale_sigma=True)
+    clahe = cv2.createCLAHE(2.0, (8, 8))
+    enhanced = clahe.apply((denoised * 255).astype(np.uint8))
+    return cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
 
-# Step 3: Apply super-resolution using PIL
-def apply_super_resolution(image):
-    pil_image = Image.fromarray(image)
-    width, height = pil_image.size
-    new_size = (width * 4, height * 4)
-    super_res_image = pil_image.resize(new_size, Image.BICUBIC)
-    return np.array(super_res_image)
-
-# Step 4: Apply gamma correction
-def gamma_correction(image, gamma=1.5):
-    inv_gamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
-    return cv2.LUT(image, table)
-
-# Step 5: Enhance edges using a bilateral filter
-def enhance_edges(image):
-    return cv2.bilateralFilter(image, 9, 75, 75)
-
-# Step 6: Sharpen the image
-def sharpen_image(image):
-    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    return cv2.filter2D(image, -1, kernel)
-
-# Step 7: Enhance image with U-Net model
-def enhance_with_unet(image_path):
-    image = Image.open(image_path).convert('RGB')
-    image = test_transform(image).unsqueeze(0).to(device)
+def enhance_with_unet(image):
+    pil_image = Image.fromarray(image).convert("RGB")
+    tensor = transform(pil_image).unsqueeze(0).to(device)
     with torch.no_grad():
-        output = unet_model(image)
-    output_image = output.squeeze().cpu().numpy().transpose((1, 2, 0))
-    output_image = (output_image * 255).astype(np.uint8)
-    return output_image
+        output = unet_model(tensor).squeeze(0).cpu().permute(1, 2, 0).numpy()
+    return (np.clip(output, 0, 1) * 255).astype(np.uint8)
 
-# Step 8: Enhance image with LLFlowNet model
-def enhance_with_llflow(image_path):
-    image = Image.open(image_path).convert('RGB')
-    image = test_transform(image).unsqueeze(0).to(device)
+def enhance_with_llflow(image):
+    pil_image = Image.fromarray(image).convert("RGB")
+    tensor = transform(pil_image).unsqueeze(0).to(device)
     with torch.no_grad():
-        output = llflow_model(image)
-    output_image = output.squeeze(0).cpu().permute(1, 2, 0).numpy()
-    output_image = (output_image * 255).astype('uint8')
-    return output_image
+        output = llflow_model(tensor).squeeze(0).cpu().permute(1, 2, 0).numpy()
+    return (output * 255).astype(np.uint8)
 
-# Step 9: Enhance image with DeepUPE model
-def enhance_with_deep_upe(image_path):
-    preprocessed_image = preprocess_image(image_path)
-    image_rgb = cv2.cvtColor(preprocessed_image, cv2.COLOR_GRAY2RGB)
-    image_resized = cv2.resize(image_rgb, (256, 256))
-    image_normalized = image_resized / 255.0
-    image_input = np.expand_dims(image_normalized, axis=0)
-    enhanced_image = deep_upe_model.predict(image_input)
-    enhanced_image = np.squeeze(enhanced_image, axis=0)
-    enhanced_image = np.clip(enhanced_image * 255.0, 0, 255).astype(np.uint8)
-    return enhanced_image
-
-# Step 10: Enhance image with Retinex-Net model
-def enhance_with_retinex_net(image_path):
-    img = load_img(image_path, target_size=(256, 256))
-    img_array = img_to_array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    enhanced_img = retinex_net_model.predict(img_array)
-    enhanced_img = np.squeeze(enhanced_img, axis=0)
-    enhanced_img = np.clip(enhanced_img * 255.0, 0, 255).astype(np.uint8)
-    return enhanced_img
+def enhance_with_retinex(image):
+    pil_image = Image.fromarray(image).resize((256, 256))
+    img_array = img_to_array(pil_image) / 255.0
+    output = retinex_model.predict(np.expand_dims(img_array, 0))[0]
+    return np.clip(output * 255, 0, 255).astype(np.uint8)
 
 @app.route("/", methods=["GET", "POST"])
 def upload_image():
     if request.method == "POST":
-        if "file" not in request.files:
-            return "No file part"
-        file = request.files["file"]
-        if file.filename == "":
-            return "No selected file"
-        
+        file = request.files.get("file")
         if file:
-            # Save uploaded file
-            file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(file_path)
+            image = Image.open(file.stream).convert("RGB")
+            image_np = np.array(image)
 
-            # Process images and save them in static/processed/
-            original_path = os.path.join(PROCESSED_FOLDER, "original_" + file.filename)
-            pipeline_path = os.path.join(PROCESSED_FOLDER, "pipeline_" + file.filename)
-            unet_path = os.path.join(PROCESSED_FOLDER, "unet_" + file.filename)
-            llflow_path = os.path.join(PROCESSED_FOLDER, "llflow_" + file.filename)
-            deep_upe_path = os.path.join(PROCESSED_FOLDER, "deep_upe_" + file.filename)
-            retinex_net_path = os.path.join(PROCESSED_FOLDER, "retinex_net_" + file.filename)
+            # Process
+            original = cv2.resize(image_np, (256, 256))
+            pipeline = preprocess_image(original)
+            unet_img = enhance_with_unet(original)
+            llflow_img = enhance_with_llflow(original)
+            retinex_img = enhance_with_retinex(original)
 
-            cv2.imwrite(original_path, cv2.imread(file_path))
-            cv2.imwrite(pipeline_path, preprocess_image(file_path))
-            cv2.imwrite(unet_path, enhance_with_unet(file_path))
-            cv2.imwrite(llflow_path, enhance_with_llflow(file_path))
-            cv2.imwrite(deep_upe_path, enhance_with_deep_upe(file_path))
-            cv2.imwrite(retinex_net_path, enhance_with_retinex_net(file_path))
+            # Canny edges
+            def canny_count(img):
+                edges = cv2.Canny(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY), 50, 150)
+                return edges, int(np.sum(edges > 0))
 
-            # Process Canny edge detection and save results
-            gray_original = cv2.cvtColor(cv2.imread(file_path), cv2.COLOR_BGR2GRAY)
-            edges_original = cv2.Canny(gray_original, 50, 150)
-            edges_original_count = np.sum(edges_original > 0)
-            original_canny_path = os.path.join(PROCESSED_FOLDER, "original_canny_" + file.filename)
-            cv2.imwrite(original_canny_path, edges_original)
+            original_canny, count_orig = canny_count(original)
+            pipeline_canny, count_pipe = canny_count(pipeline)
+            retinex_canny, count_retinex = canny_count(retinex_img)
 
-            preprocessed_image = preprocess_image(file_path)
-            edges_pipeline = cv2.Canny(preprocessed_image, 50, 150)
-            edges_pipeline_count = np.sum(edges_pipeline > 0)
-            pipeline_canny_path = os.path.join(PROCESSED_FOLDER, "pipeline_canny_" + file.filename)
-            cv2.imwrite(pipeline_canny_path, edges_pipeline)
-
-            deep_image = enhance_with_deep_upe(file_path)
-            edges_deep = cv2.Canny(cv2.cvtColor(deep_image, cv2.COLOR_BGR2GRAY), 50, 150)
-            edges_deep_count = np.sum(edges_deep > 0)
-            deep_canny_path = os.path.join(PROCESSED_FOLDER, "deep_canny_" + file.filename)
-            cv2.imwrite(deep_canny_path, edges_deep)
-
-            retinex_image=enhance_with_retinex_net(file_path)
-            edges_retinex = cv2.Canny(cv2.cvtColor(retinex_image, cv2.COLOR_BGR2GRAY), 50, 150)
-            edges_retinex_count = np.sum(edges_retinex > 0)
-            retinex_canny_path = os.path.join(PROCESSED_FOLDER, "retinex_canny_" + file.filename)
-            cv2.imwrite(retinex_canny_path, edges_retinex)
-
-            # Render template with correct paths
+            # Render
             return render_template("index.html",
-                                   original_image="processed/original_" + file.filename,
-                                   pipeline_image="processed/pipeline_" + file.filename,
-                                   unet_image="processed/unet_" + file.filename,
-                                   llflow_image="processed/llflow_" + file.filename,
-                                   deep_upe_image="processed/deep_upe_" + file.filename,
-                                   retinex_net_image="processed/retinex_net_" + file.filename,
-                                   original_canny="processed/original_canny_" + file.filename,
-                                   pipeline_canny="processed/pipeline_canny_" + file.filename,
-                                   deep_canny="processed/deep_canny_" + file.filename,
-                                   retinex_canny="processed/retinex_canny_"+file.filename,
-                                   original_edges=edges_original_count,
-                                   pipeline_edges=edges_pipeline_count,
-                                   deep_edges=edges_deep_count,
-                                   retinex_edges=edges_retinex_count)
-
+                original=img_to_base64(original),
+                pipeline=img_to_base64(pipeline),
+                unet=img_to_base64(unet_img),
+                llflow=img_to_base64(llflow_img),
+                retinex=img_to_base64(retinex_img),
+                canny_original=img_to_base64(original_canny),
+                canny_pipeline=img_to_base64(pipeline_canny),
+                canny_retinex=img_to_base64(retinex_canny),
+                count_original=count_orig,
+                count_pipeline=count_pipe,
+                count_retinex=count_retinex
+            )
     return render_template("index.html")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(debug=True)
